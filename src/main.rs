@@ -41,9 +41,9 @@ impl UserCounter {
     fn decrement(&self, ip: String) -> usize {
         let mut ips = self.ips.lock().unwrap();
 
-        // if ips.is_empty() {
-        //     return self.count.load(std::sync::atomic::Ordering::SeqCst);
-        // }
+        if ips.is_empty() {
+            return self.count.load(std::sync::atomic::Ordering::SeqCst);
+        }
 
         if ips.contains(&ip) {
             ips.remove(&ip);
