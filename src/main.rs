@@ -45,7 +45,7 @@ impl UserCounter {
 
         if ips.contains(&ip) {
             ips.remove(&ip);
-            return self.count.load(std::sync::atomic::Ordering::SeqCst);
+            return self.count.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) - 1;
         }
 
         self.count.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) - 1
