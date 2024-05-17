@@ -27,11 +27,13 @@ impl UserCounter {
     fn increment(&self, ip: String) -> usize {
         let mut ips = self.ips.lock().unwrap();
 
+        // println!("IP: {:?}", ips);
+
         if ips.contains(&ip) {
             return self.count.load(std::sync::atomic::Ordering::SeqCst);
         }
 
-        ips.insert(ip.clone());
+        ips.insert(ip);
 
         self.count.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1
     }
@@ -39,9 +41,9 @@ impl UserCounter {
     fn decrement(&self, ip: String) -> usize {
         let mut ips = self.ips.lock().unwrap();
 
-        if ips.is_empty() {
-            return self.count.load(std::sync::atomic::Ordering::SeqCst);
-        }
+        // if ips.is_empty() {
+        //     return self.count.load(std::sync::atomic::Ordering::SeqCst);
+        // }
 
         if ips.contains(&ip) {
             ips.remove(&ip);
@@ -57,13 +59,13 @@ async fn on_connect(socket: SocketRef, user_counter: Arc<UserCounter>) {
 
     let user_count = user_counter.increment(ip.to_string());
 
-    // println!(
-    //     "Client connected: {}, live users: {}",
-    //     socket.id, user_count
-    // );
+    println!(
+        "Client connected: {}, live users: {}",
+        socket.id, user_count
+    );
 
     socket.on("get_live_users", move |socket: SocketRef| {
-        // println!("get_live_users: {}", user_count);
+        println!("get_live_users: {}", user_count);
 
         socket.emit("live_users", &user_count).unwrap();
 
@@ -73,10 +75,10 @@ async fn on_connect(socket: SocketRef, user_counter: Arc<UserCounter>) {
     socket.on_disconnect(move |socket: SocketRef| {
         let user_count = user_counter.decrement(ip.to_string());
 
-        // println!(
-        //     "Client disconnected: {}, live users: {}",
-        //     socket.id, user_count
-        // );
+        println!(
+            "Client disconnected: {}, live users: {}",
+            socket.id, user_count
+        );
 
         socket.broadcast().emit("live_users", &user_count).unwrap();
     })
@@ -101,7 +103,7 @@ async fn main() -> shuttle_axum::ShuttleAxum {
     // let listener = tokio::net::TcpListener::bind("127.0.0.1:1337").await?;
     //
     // axum::serve(listener, app).await?;
-
+    //
     // Ok(())
 
     Ok(app.into())
