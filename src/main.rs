@@ -1,6 +1,5 @@
 use axum::routing::get;
 use axum::Router;
-use local_ip_address::local_ip;
 use socketioxide::{
     extract::{Data, SocketRef},
     SocketIo,
@@ -50,10 +49,6 @@ impl UserCounter {
 
         self.count.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) - 1
     }
-
-    // fn get_count(&self) -> usize {
-    //     self.count.load(std::sync::atomic::Ordering::SeqCst)
-    // }
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -62,29 +57,22 @@ struct User {
 }
 
 async fn on_connect(socket: SocketRef, user_counter: Arc<UserCounter>) {
-    // let ip = local_ip().unwrap();
-
-    // let user_count = user_counter.increment(ip.clone().to_string());
-
-    // println!(
-    //     "Client connected: {}, live users: {}",
-    //     socket.id, user_count
-    // );
-    //
-
-    let mut ip = Arc::new(String::new());
-
-    // if socket.connected() {
     let user_counter_clone = user_counter.clone();
+
+    let ipAddr = Arc::new(Mutex::new("".to_string()));
+
+    let ipAddrClone = ipAddr.clone();
+
     socket.on(
         "get_live_users",
         move |socket: SocketRef, Data::<User>(user)| {
             let user_count = user_counter.increment(user.ip.to_string());
 
-            ip = Arc::new(user.ip.to_string());
-            
+            let mut ip = ipAddr.lock().unwrap();
+
+            *ip = user.ip.to_string();
+
             println!("get_live_users: {:?}", user);
-            // println!("ip: {}", user.ip);
 
             socket.emit("live_users", &user_count).unwrap();
 
@@ -92,36 +80,23 @@ async fn on_connect(socket: SocketRef, user_counter: Arc<UserCounter>) {
         },
     );
 
+    socket.on_disconnect(move |socket: SocketRef| {
+        let ip = ipAddrClone.lock().unwrap();
 
-    socket.on(
-        "remove",
-        move |socket: SocketRef, Data::<User>(user)| {
-            let user_count = user_counter_clone.decrement(user.ip.to_string());
+        let user_count = user_counter_clone.decrement(ip.clone().to_string());
 
-            println!("remove: {:?}", user);
-            // println!("ip: {}", user.ip);
+        println!(
+            "Client disconnected: {}, live users: {}",
+            socket.id, user_count
+        );
 
-            socket.emit("live_users", &user_count).unwrap();
-
-            socket.broadcast().emit("live_users", &user_count).unwrap();
-        },
-    );
-
-    // socket.on_disconnect(move |socket: SocketRef| {
-    //     let user_count = user_counter_clone.decrement(ip.clone().to_string());
-    // 
-    //     println!(
-    //         "Client disconnected: {}, live users: {}",
-    //         socket.id, user_count
-    //     );
-    // 
-    //     socket.broadcast().emit("live_users", &user_count).unwrap();
-    // })
+        socket.broadcast().emit("live_users", &user_count).unwrap();
+    })
 }
 
 // #[tokio::main]
 #[shuttle_runtime::main]
-async fn main()-> shuttle_axum::ShuttleAxum
+async fn main() -> shuttle_axum::ShuttleAxum
 {
     let (layer, io) = SocketIo::new_layer();
     let user_counter = Arc::new(UserCounter::new());
