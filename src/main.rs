@@ -10,7 +10,6 @@ use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use tracing::info;
-use tracing_subscriber::FmtSubscriber;
 
 struct UserCounter {
     count: AtomicUsize,
@@ -62,7 +61,6 @@ async fn on_connect(socket: SocketRef, user_counter: Arc<UserCounter>) {
 // #[tokio::main]
 #[shuttle_runtime::main]
 async fn main() -> shuttle_axum::ShuttleAxum {
-    tracing::subscriber::set_global_default(FmtSubscriber::default())?;
 
     let (layer, io) = SocketIo::new_layer();
     let user_counter = Arc::new(UserCounter::new());
@@ -76,8 +74,6 @@ async fn main() -> shuttle_axum::ShuttleAxum {
                 .layer(CorsLayer::permissive())
                 .layer(layer),
         );
-
-    info!("Starting server");
 
     // let listener = tokio::net::TcpListener::bind("127.0.0.1:1337").await?;
     //
