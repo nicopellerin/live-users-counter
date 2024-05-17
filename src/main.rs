@@ -57,7 +57,7 @@ impl UserCounter {
 async fn on_connect(socket: SocketRef, user_counter: Arc<UserCounter>) {
     let ip = local_ip().unwrap();
 
-    let user_count = user_counter.increment(ip.to_string());
+    let user_count = user_counter.increment(ip.clone().to_string());
 
     println!(
         "Client connected: {}, live users: {}",
@@ -72,8 +72,9 @@ async fn on_connect(socket: SocketRef, user_counter: Arc<UserCounter>) {
         socket.broadcast().emit("live_users", &user_count).unwrap();
     });
 
+    let user_counter_clone = Arc::clone(&user_counter);
     socket.on_disconnect(move |socket: SocketRef| {
-        let user_count = user_counter.decrement(ip.to_string());
+        let user_count = user_counter_clone.decrement(ip.clone().to_string());
 
         println!(
             "Client disconnected: {}, live users: {}",
