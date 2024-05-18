@@ -4,50 +4,62 @@ use socketioxide::{
     extract::{Data, SocketRef},
     SocketIo,
 };
-use std::collections::HashSet;
-use std::sync::atomic::AtomicUsize;
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 
 struct UserCounter {
     count: AtomicUsize,
-    ips: Mutex<HashSet<String>>,
+    ips: Mutex<HashMap<String, usize>>,
 }
 
 impl UserCounter {
     fn new() -> Self {
         Self {
             count: AtomicUsize::new(0),
-            ips: Mutex::new(HashSet::new()),
+            ips: Mutex::new(HashMap::new()),
         }
     }
 
     fn increment(&self, ip: String) -> usize {
         let mut ips = self.ips.lock().unwrap();
 
-        if ips.contains(&ip) {
-            return self.count.load(std::sync::atomic::Ordering::SeqCst);
+        let counter = ips.entry(ip.clone()).or_insert(0);
+
+        if *counter == 0 {
+            self.count.fetch_add(1, Ordering::SeqCst);
         }
 
-        ips.insert(ip);
+        *counter += 1;
 
-        self.count.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1
+        println!("increment: {}", *counter);
+
+        self.get_count()
     }
 
     fn decrement(&self, ip: String) -> usize {
         let mut ips = self.ips.lock().unwrap();
 
-        if ips.is_empty() {
-            return self.count.load(std::sync::atomic::Ordering::SeqCst);
+        if let Some(counter) = ips.get_mut(&ip) {
+            if *counter > 0 {
+                *counter -= 1;
+
+                println!("decrement: {}", *counter);
+
+                if *counter == 0 {
+                    self.count.fetch_sub(1, Ordering::SeqCst);
+                    ips.remove(&ip);
+                }
+            }
         }
 
-        if ips.contains(&ip) {
-            ips.remove(&ip);
-            return self.count.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) - 1;
-        }
+        self.get_count()
+    }
 
-        self.count.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) - 1
+    fn get_count(&self) -> usize {
+        self.count.load(Ordering::SeqCst)
     }
 }
 
@@ -96,8 +108,7 @@ async fn on_connect(socket: SocketRef, user_counter: Arc<UserCounter>) {
 
 // #[tokio::main]
 #[shuttle_runtime::main]
-async fn main() -> shuttle_axum::ShuttleAxum
-{
+async fn main() -> shuttle_axum::ShuttleAxum {
     let (layer, io) = SocketIo::new_layer();
     let user_counter = Arc::new(UserCounter::new());
 
@@ -113,9 +124,9 @@ async fn main() -> shuttle_axum::ShuttleAxum
         );
 
     // let listener = tokio::net::TcpListener::bind("127.0.0.1:1337").await?;
-    // 
+    //
     // axum::serve(listener, app).await?;
-    // 
+    //
     // Ok(())
 
     Ok(app.into())
