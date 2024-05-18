@@ -4,7 +4,7 @@ use socketioxide::{
     extract::{Data, SocketRef},
     SocketIo,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tower::ServiceBuilder;
@@ -72,7 +72,6 @@ async fn on_connect(socket: SocketRef, user_counter: Arc<UserCounter>) {
     let user_counter_clone = user_counter.clone();
 
     let ipAddr = Arc::new(Mutex::new("".to_string()));
-
     let ipAddrClone = ipAddr.clone();
 
     socket.on(
@@ -87,7 +86,6 @@ async fn on_connect(socket: SocketRef, user_counter: Arc<UserCounter>) {
             println!("get_live_users: {:?}", user);
 
             socket.emit("live_users", &user_count).unwrap();
-
             socket.broadcast().emit("live_users", &user_count).unwrap();
         },
     );
@@ -114,14 +112,11 @@ async fn main() -> shuttle_axum::ShuttleAxum {
 
     io.ns("/", move |socket| on_connect(socket, user_counter.clone()));
 
-    let app = Router::new()
-        .route("/", get(|| async { "Hello, World!" }))
-        // .with_state(io)
-        .layer(
-            ServiceBuilder::new()
-                .layer(CorsLayer::permissive())
-                .layer(layer),
-        );
+    let app = Router::new().route("/", get(|| async { "Yooo!" })).layer(
+        ServiceBuilder::new()
+            .layer(CorsLayer::permissive())
+            .layer(layer),
+    );
 
     // let listener = tokio::net::TcpListener::bind("127.0.0.1:1337").await?;
     //
