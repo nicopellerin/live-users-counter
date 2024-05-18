@@ -1,3 +1,3 @@
 # Live Users Counter
 
-WIP
+Small project I started to play around with websockets in Rust
