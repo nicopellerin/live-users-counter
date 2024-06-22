@@ -71,15 +71,15 @@ struct User {
 async fn on_connect(socket: SocketRef, user_counter: Arc<UserCounter>) {
     let user_counter_clone = user_counter.clone();
 
-    let ipAddr = Arc::new(Mutex::new("".to_string()));
-    let ipAddrClone = ipAddr.clone();
+    let ip_addr = Arc::new(Mutex::new("".to_string()));
+    let ip_addr_clone = ip_addr.clone();
 
     socket.on(
         "get_live_users",
         move |socket: SocketRef, Data::<User>(user)| {
-            let user_count = user_counter.increment(user.ip.to_string());
+            let user_count = &user_counter.increment(user.ip.to_string());
 
-            let mut ip = ipAddr.lock().unwrap();
+            let mut ip = ip_addr.lock().unwrap();
 
             *ip = user.ip.to_string();
 
@@ -91,7 +91,7 @@ async fn on_connect(socket: SocketRef, user_counter: Arc<UserCounter>) {
     );
 
     socket.on_disconnect(move |socket: SocketRef| {
-        let ip = ipAddrClone.lock().unwrap();
+        let ip = ip_addr_clone.lock().unwrap();
 
         let user_count = user_counter_clone.decrement(ip.clone().to_string());
 
