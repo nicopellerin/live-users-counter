@@ -1,3 +1,4 @@
+use axum::http::Method;
 use axum::routing::get;
 use axum::Router;
 use socketioxide::{
@@ -109,14 +110,18 @@ async fn on_connect(socket: SocketRef, user_counter: Arc<UserCounter>) {
 async fn main() -> shuttle_axum::ShuttleAxum {
     let (layer, io) = SocketIo::new_layer();
     let user_counter = Arc::new(UserCounter::new());
+    let cors = CorsLayer::new()
+        .allow_methods(vec![Method::GET])
+        .allow_origin([
+            "https://nicopellerin.io".parse().unwrap(),
+            "https://www.nicopellerin.io".parse().unwrap(),
+        ]);
 
     io.ns("/", move |socket| on_connect(socket, user_counter.clone()));
 
-    let app = Router::new().route("/", get(|| async { "Yooo!" })).layer(
-        ServiceBuilder::new()
-            .layer(CorsLayer::permissive())
-            .layer(layer),
-    );
+    let app = Router::new()
+        .route("/", get(|| async { "Yooo!" }))
+        .layer(cors);
 
     // let listener = tokio::net::TcpListener::bind("127.0.0.1:1337").await?;
     //
