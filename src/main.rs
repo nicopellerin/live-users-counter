@@ -8,7 +8,6 @@ use socketioxide::{
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 
 struct UserCounter {
@@ -78,34 +77,35 @@ async fn on_connect(socket: SocketRef, user_counter: Arc<UserCounter>) {
     socket.on(
         "get_live_users",
         move |socket: SocketRef, Data::<User>(user)| {
-            let user_count = &user_counter.increment(user.ip.to_string());
+            let mut ip_guard = ip_addr.lock().unwrap();
 
-            let mut ip = ip_addr.lock().unwrap();
+            if !ip_guard.is_empty() {
+                let count = user_counter.get_count();
+                socket.emit("live_users", &count).ok();
+                return;
+            }
 
-            *ip = user.ip.to_string();
+            *ip_guard = user.ip.to_string();
+            let user_count = user_counter.increment(user.ip.to_string());
 
-            println!("get_live_users: {:?}", user);
+            println!("user_count: {} for ip: {}", user_count, user.ip);
 
-            socket.emit("live_users", &user_count).unwrap();
-            socket.broadcast().emit("live_users", &user_count).unwrap();
+            socket.emit("live_users", &user_count).ok();
+            socket.broadcast().emit("live_users", &user_count).ok();
         },
     );
 
     socket.on_disconnect(move |socket: SocketRef| {
         let ip = ip_addr_clone.lock().unwrap();
 
-        let user_count = user_counter_clone.decrement(ip.clone().to_string());
+        if !ip.is_empty() {
+            let user_count = user_counter_clone.decrement(ip.clone().to_string());
 
-        println!(
-            "Client disconnected: {}, live users: {}",
-            socket.id, user_count
-        );
-
-        socket.broadcast().emit("live_users", &user_count).unwrap();
+            socket.broadcast().emit("live_users", &user_count).ok();
+        }
     })
 }
 
-// #[tokio::main]
 #[shuttle_runtime::main]
 async fn main() -> shuttle_axum::ShuttleAxum {
     let (layer, io) = SocketIo::new_layer();
@@ -115,19 +115,15 @@ async fn main() -> shuttle_axum::ShuttleAxum {
         .allow_origin([
             "https://nicopellerin.io".parse().unwrap(),
             "https://www.nicopellerin.io".parse().unwrap(),
+            // "http://localhost:3000".parse().unwrap(),
         ]);
 
     io.ns("/", move |socket| on_connect(socket, user_counter.clone()));
 
     let app = Router::new()
         .route("/", get(|| async { "Yooo!" }))
+        .layer(layer)
         .layer(cors);
-
-    // let listener = tokio::net::TcpListener::bind("127.0.0.1:1337").await?;
-    //
-    // axum::serve(listener, app).await?;
-    //
-    // Ok(())
 
     Ok(app.into())
 }
